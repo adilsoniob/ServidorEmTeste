@@ -130,7 +130,7 @@ td{padding:.45rem .4rem;border-bottom:1px solid #1e293b;font-size:.8rem}
 
     <h2>Ações</h2>
     <div style="display:flex;flex-direction:column;gap:.4rem;margin-top:.25rem">
-      <button class="btn btn-primary btn-sm" onclick="window.open('/','whatsapp-qr')">Abrir QR Code</button>
+      <button class="btn btn-primary btn-sm" onclick="action('reconnect')">Gerar QR Code</button>
       <button class="btn btn-warning btn-sm" onclick="action('reconnect')">Reconectar</button>
       <button class="btn btn-danger btn-sm" onclick="if(confirm('Desconectar WhatsApp?'))action('disconnect')">Desconectar</button>
     </div>
@@ -156,8 +156,12 @@ td{padding:.45rem .4rem;border-bottom:1px solid #1e293b;font-size:.8rem}
         <div class="actions">
           <span class="tag tag-info" id="statusTag">Inicializando</span>
         </div>
+        <div id="wsQrContainer" style="display:none;text-align:center;padding:12px 0">
+          <img id="wsQrImage" style="width:220px;height:220px;border-radius:12px;border:2px solid #334155;background:#fff;padding:8px" alt="QR Code WhatsApp">
+          <p style="margin:8px 0 0;font-size:.75rem;color:#94a3b8">Escaneie o QR Code com seu WhatsApp</p>
+        </div>
         <div class="actions">
-          <button class="btn btn-primary btn-sm" onclick="window.open('/','whatsapp-qr')">Exibir QR Code</button>
+          <button class="btn btn-primary btn-sm" onclick="action('reconnect')">Gerar QR Code</button>
           <button class="btn btn-warning btn-sm" onclick="action('reconnect')">Reconectar</button>
           <button class="btn btn-danger btn-sm" onclick="if(confirm('Desconectar WhatsApp?'))action('disconnect')">Desconectar</button>
           <button class="btn btn-outline btn-sm" onclick="fetchStatus()">Atualizar</button>
@@ -238,6 +242,17 @@ function renderStatus(status) {
   }
 
   document.getElementById("connectedSince").textContent = status.connectedAt ? new Date(status.connectedAt).toLocaleString("pt-BR") : "---";
+
+  const qrContainer = document.getElementById("wsQrContainer");
+  const qrImage = document.getElementById("wsQrImage");
+  if (qrContainer && qrImage) {
+    if (status.qr && status.state === "awaiting_qr") {
+      qrImage.src = status.qr;
+      qrContainer.style.display = "block";
+    } else {
+      qrContainer.style.display = "none";
+    }
+  }
 }
 
 function renderUptime() {
