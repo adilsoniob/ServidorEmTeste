@@ -217,8 +217,8 @@ tr:hover td{background:rgba(59,130,246,.04)}
     <div id="sidebarAccounts"></div>
     <h2>Ações</h2>
     <div style="display:flex;flex-direction:column;gap:.3rem">
-      <button class="btn btn-primary btn-sm" onclick="addAccount()">+ Adicionar Conta</button>
-      <button class="btn btn-outline btn-sm" onclick="fullRefresh()">Atualizar</button>
+      <button class="btn btn-primary btn-sm" onclick="_addAccount()">+ Adicionar Conta</button>
+      <button class="btn btn-outline btn-sm" onclick="_fullRefresh()">Atualizar</button>
     </div>
   </aside>
   <div class="main">
@@ -322,9 +322,15 @@ tr:hover td{background:rgba(59,130,246,.04)}
 </div>
 <div class="toast" id="toastContainer"></div>
 <script>
-(function(){
 var qrModalIndex = -1;
 var qrTimer = null;
+
+window._refreshQR = refreshQR;
+window._cancelQR = cancelQR;
+window._addAccount = addAccount;
+window._retryAll = retryAll;
+window._clearCompleted = clearCompleted;
+window._fullRefresh = fullRefresh;
 
 function toast(msg, type) {
   var el = document.createElement("div");
@@ -340,9 +346,8 @@ function byId(s) { return document.getElementById(s) }
 
 function api(url, opts) {
   opts = opts || {};
-  var headers = { "Content-Type": "application/json" };
-  if (opts.body) opts.body = JSON.stringify(opts.body);
-  opts.headers = headers;
+  opts.headers = opts.headers || {};
+  if (opts.body) { opts.body = JSON.stringify(opts.body); opts.headers["Content-Type"] = "application/json" }
   return fetch(url, opts).then(function(r) { return r.json() }).catch(function() { return { success: false, error: "Erro de conexão" } });
 }
 
@@ -621,7 +626,6 @@ loadQueue();
 setInterval(fetchDashboard, 5000);
 setInterval(loadQueue, 8000);
 setInterval(loadMessages, 10000);
-})();
 </script>
 </body>
 </html>`;
