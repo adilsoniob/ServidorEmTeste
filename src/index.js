@@ -18,7 +18,7 @@ const whatsapp = new WhatsAppService(null, storage);
 const app = createApp(whatsapp);
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: { origin: config.corsOrigin === "*" ? true : config.corsOrigin.split(",").map((s) => s.trim()), methods: ["GET", "POST"] },
   pingTimeout: 30000,
   pingInterval: 25000,
 });

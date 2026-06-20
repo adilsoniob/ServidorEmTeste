@@ -23,6 +23,7 @@ export const config = {
   sessionFolder: process.env.SESSION_FOLDER || "./data/session",
   // Número máximo de contas simultâneas
   maxAccounts: parseInt(process.env.MAX_ACCOUNTS || "1", 10),
+  corsOrigin: process.env.CORS_ORIGIN || "*",
   // Stealth: proteção anti-bloqueio (desligado por padrão)
   stealth: {
     enabled: process.env.STEALTH_ENABLED === "true",

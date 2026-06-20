@@ -7,8 +7,6 @@ import { Stealth } from "./stealth/index.js";
 const Client = pkg.Client || pkg.default?.Client;
 const LocalAuth = pkg.LocalAuth || pkg.default?.LocalAuth;
 
-const RATE = { maxPerMinute: 5, intervalMs: 6000, sent: [], lastSend: 0 };
-
 const STATES = Object.freeze({
   STARTING: "starting",
   AWAITING_QR: "awaiting_qr",
@@ -60,6 +58,7 @@ export class WhatsAppSession {
     this._processingQueue = false;
     this._queueWorkerTimer = null;
     this._queueProcessing = false;
+    this.rate = { maxPerMinute: 5, intervalMs: 6000, sent: [], lastSend: 0 };
     this.stealth = new Stealth(config.stealth, this.index);
   }
 
@@ -143,11 +142,11 @@ export class WhatsAppSession {
 
   async _doSend(cleanNumber, message) {
     const now = Date.now();
-    RATE.sent = RATE.sent.filter((t) => now - t < 60000);
-    if (RATE.sent.length >= RATE.maxPerMinute) {
-      return this._fail("RATE_LIMIT", `Limite de ${RATE.maxPerMinute} mensagens/minuto atingido.`);
+    this.rate.sent = this.rate.sent.filter((t) => now - t < 60000);
+    if (this.rate.sent.length >= this.rate.maxPerMinute) {
+      return this._fail("RATE_LIMIT", `Limite de ${this.rate.maxPerMinute} mensagens/minuto atingido.`);
     }
-    const wait = RATE.intervalMs - (now - RATE.lastSend);
+    const wait = this.rate.intervalMs - (now - this.rate.lastSend);
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 
     let chatId = `${cleanNumber}@c.us`;
@@ -174,8 +173,8 @@ export class WhatsAppSession {
       );
 
       this.lastSendAt = new Date().toISOString();
-      RATE.lastSend = Date.now();
-      RATE.sent.push(RATE.lastSend);
+      this.rate.lastSend = Date.now();
+      this.rate.sent.push(this.rate.lastSend);
       const messageId = sent?.id?._serialized || sent?.id || null;
       log.info(`[${this.accountLabel}] Mensagem enviada`, { to: chatId, messageId });
       this._addLog("message_sent", `Mensagem enviada para ${cleanNumber}`, { to: cleanNumber, messageId });
@@ -211,8 +210,8 @@ export class WhatsAppSession {
     this._queueProcessing = true;
     try {
       const now = Date.now();
-      const recent = RATE.sent.filter((t) => now - t < 60000);
-      if (recent.length >= RATE.maxPerMinute) {
+      const recent = this.rate.sent.filter((t) => now - t < 60000);
+      if (recent.length >= this.rate.maxPerMinute) {
         const oldest = recent[0] || 0;
         const wait = 60000 - (now - oldest);
         if (wait > 1000) return;

@@ -34,9 +34,13 @@ function getNextMsgId(msgs) {
   return _nextMsgId++;
 }
 
-export function createAdminRouter(whatsapp) {
+export function createAdminRouter(whatsapp, authMiddleware) {
   const router = Router();
   const storage = whatsapp.storage;
+
+  if (authMiddleware) {
+    router.use(authMiddleware);
+  }
 
   // ---- Status ----
 
@@ -364,6 +368,16 @@ tr:hover td{background:rgba(59,130,246,.04)}
 </style>
 </head>
 <body>
+<div id="loginScreen" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:var(--radius);padding:2rem;border:1px solid var(--border);max-width:340px;width:90%;text-align:center">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="margin-bottom:1rem"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <h2 style="font-size:1rem;margin-bottom:.25rem">WhatsApp Server</h2>
+    <p style="font-size:.75rem;color:var(--muted);margin-bottom:1rem">Insira a chave de acesso para continuar</p>
+    <input id="loginKey" type="password" placeholder="Chave de acesso" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.85rem;margin-bottom:.75rem;text-align:center">
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Entrar</button>
+    <p id="loginError" style="font-size:.7rem;color:var(--red);margin-top:.5rem;display:none">Chave invalida</p>
+  </div>
+</div>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <div class="logo">
@@ -596,6 +610,43 @@ var qrModalIndex = -1;
 var qrTimer = null;
 var waMsgEditId = null;
 
+function doLogin() {
+  var key = document.getElementById("loginKey").value.trim();
+  if (!key) return;
+  localStorage.setItem("wa_admin_token", key);
+  document.getElementById("loginError").style.display = "none";
+  api("/api/admin/status").then(function(r) {
+    if (r.success) {
+      document.getElementById("loginScreen").style.display = "none";
+      document.querySelector(".layout").style.display = "";
+      fetchDashboard();
+    } else {
+      localStorage.removeItem("wa_admin_token");
+      document.getElementById("loginError").style.display = "block";
+    }
+  });
+}
+document.getElementById("loginKey").addEventListener("keydown", function(e) { if (e.key === "Enter") doLogin() });
+
+(function checkAuth() {
+  var token = getAuthToken();
+  if (!token) {
+    document.getElementById("loginScreen").style.display = "flex";
+    document.querySelector(".layout").style.display = "none";
+    return;
+  }
+  api("/api/admin/status").then(function(r) {
+    if (!r.success) {
+      localStorage.removeItem("wa_admin_token");
+      document.getElementById("loginScreen").style.display = "flex";
+      document.querySelector(".layout").style.display = "none";
+    } else {
+      document.getElementById("loginScreen").style.display = "none";
+      document.querySelector(".layout").style.display = "";
+    }
+  });
+})();
+
 function toast(msg, type) {
   var el = document.createElement("div");
   el.className = "toast-item toast-" + (type || "info");
@@ -608,11 +659,16 @@ function q(s) { return document.querySelector(s) }
 function qa(s) { return document.querySelectorAll(s) }
 function byId(s) { return document.getElementById(s) }
 
+function getAuthToken() { return localStorage.getItem("wa_admin_token") || "" }
+
 function api(url, opts) {
   opts = opts || {};
   opts.headers = opts.headers || {};
+  var token = getAuthToken();
+  if (token) opts.headers["Authorization"] = "Bearer " + token;
   if (opts.body) { opts.body = JSON.stringify(opts.body); opts.headers["Content-Type"] = "application/json" }
   return fetch(url, opts).then(function(r) {
+    if (r.status === 401) { localStorage.removeItem("wa_admin_token"); location.reload(); return { success: false, error: "Sessao expirada" } }
     if (!r.ok) return { success: false, error: "HTTP " + r.status };
     return r.json();
   }).catch(function(e) { return { success: false, error: String(e) } });
@@ -1131,7 +1187,7 @@ window.saveCampaign = async function() {
   if (delayMax < delayMin) { toast("Delay maximo deve ser >= minimo", "error"); return; }
   var r = await api("/api/campaigns", {
     method: "POST",
-    body: JSON.stringify({ name, messages, numbers, delayMin, delayMax })
+    body: { name, messages, numbers, delayMin, delayMax }
   });
   if (r.success) {
     toast("Campanha criada com sucesso!", "success");

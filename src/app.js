@@ -13,19 +13,20 @@ import { createAdminRouter } from "./routes/admin.js";
 import { createQueueRouter } from "./routes/queue.js";
 import { createCampaignRouter } from "./routes/campaigns.js";
 import { createDiagnosticsRouter } from "./routes/diagnostics.js";
+import { config } from "./config.js";
 
 export function createApp(whatsapp) {
   const app = express();
 
-  app.use(cors());
+  app.use(cors({ origin: config.corsOrigin === "*" ? true : config.corsOrigin.split(",").map((s) => s.trim()) }));
   app.use(express.json());
 
   app.locals.whatsapp = whatsapp;
 
   const tracker = trackerMiddleware(whatsapp);
 
-  // Admin + monitoring API
-  app.use("/", createAdminRouter(whatsapp));
+  // Admin + monitoring API (autenticada)
+  app.use("/", createAdminRouter(whatsapp, authMiddleware));
 
   // Public routes
   app.use("/", qrPageRouter);
@@ -71,19 +72,19 @@ export function createApp(whatsapp) {
     res.json({ success: true, message: `Sessão da conta ${index} removida.` });
   });
 
-  app.get("/api/accounts", (req, res) => {
+  app.get("/api/accounts", authMiddleware, (req, res) => {
     const accounts = whatsapp.getAccounts();
     res.json({ success: true, accounts });
   });
 
-  app.get("/api/admin/stats", (req, res) => {
+  app.get("/api/admin/stats", authMiddleware, (req, res) => {
     const stats = whatsapp.storage?.getMessageStats() || {};
     res.json({ success: true, stats });
   });
 
   // ---- New admin API endpoints ----
 
-  app.get("/api/admin/dashboard", (req, res) => {
+  app.get("/api/admin/dashboard", authMiddleware, (req, res) => {
     const accounts = whatsapp.getAccounts() || [];
     const msgStats = whatsapp.storage?.getMessageStatsByPeriod() || {};
     const integrationStats = whatsapp.storage?.getIntegrationStats() || {};
@@ -103,7 +104,7 @@ export function createApp(whatsapp) {
     });
   });
 
-  app.get("/api/admin/integrations", (req, res) => {
+  app.get("/api/admin/integrations", authMiddleware, (req, res) => {
     const integrations = whatsapp.storage?.getIntegrations() || [];
     res.json({ success: true, integrations });
   });

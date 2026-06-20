@@ -6,7 +6,7 @@ import { Router } from "express";
 
 export const disconnectRouter = Router();
 
-disconnectRouter.get("/", async (req, res) => {
+disconnectRouter.post("/", async (req, res) => {
   const whatsapp = req.app.locals.whatsapp;
   if (!whatsapp) {
     return res.status(503).json({ success: false, error: "WhatsApp não inicializado." });

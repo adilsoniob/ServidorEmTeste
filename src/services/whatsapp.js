@@ -51,8 +51,8 @@ export class WhatsAppService {
   }
 
   async sendMessageToQueue(number, message, metadata = {}) {
-    const { default: queueModule } = await import("./queue.js");
-    const id = await queueModule.enqueue(number, message, metadata);
+    const { enqueue } = await import("./queue.js");
+    const id = await enqueue(number, message, metadata);
     return { success: true, queueId: id };
   }
 

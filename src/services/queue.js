@@ -6,6 +6,9 @@ const DB_PATH = "./data/queue.db";
 
 let db = null;
 let SQL = null;
+let _dequeueLock = Promise.resolve();
+let _saveTimer = null;
+let _dirty = false;
 
 async function getDb() {
   if (db) return db;
@@ -38,9 +41,25 @@ async function getDb() {
   db.run("CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority, created_at)");
   try { db.run("ALTER TABLE message_queue ADD COLUMN account INTEGER"); } catch {}
   db.run("CREATE INDEX IF NOT EXISTS idx_queue_account ON message_queue(account)");
-  _save();
+  _save(true);
   _initCampaignTables(db);
+  _recoverOrphanedMessages(db);
   return db;
+}
+
+function _recoverOrphanedMessages(database) {
+  try {
+    const result = database.exec("SELECT COUNT(*) FROM message_queue WHERE status = 'processing'");
+    const count = result[0]?.values[0][0] || 0;
+    if (count > 0) {
+      const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
+      database.run("UPDATE message_queue SET status = 'pending', account = NULL, last_error = 'orphan_recovery', updated_at = ? WHERE status = 'processing'", [ts]);
+      _save(true);
+      log.info("[queue] Mensagens orphaned recuperadas", { count });
+    }
+  } catch (err) {
+    log.error("[queue] Erro ao recuperar mensagens orphaned", { error: err.message });
+  }
 }
 
 function _initCampaignTables(database) {
@@ -86,10 +105,28 @@ function _initCampaignTables(database) {
   }
 }
 
-function _save() {
+function _save(immediate = false) {
   if (!db) return;
-  const data = db.export();
-  writeFileSync(DB_PATH, Buffer.from(data));
+  _dirty = true;
+  if (immediate) {
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    const data = db.export();
+    writeFileSync(DB_PATH, Buffer.from(data));
+    _dirty = false;
+    return;
+  }
+  if (_saveTimer) return;
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null;
+    if (!_dirty || !db) return;
+    const data = db.export();
+    writeFileSync(DB_PATH, Buffer.from(data));
+    _dirty = false;
+  }, 2000);
+}
+
+export function flushSave() {
+  _save(true);
 }
 
 function nowISO() {
@@ -110,6 +147,12 @@ export async function enqueue(phone, message, metadata = {}) {
 }
 
 export async function dequeue(limit = 1, account) {
+  const result = _dequeueLock.then(() => _doDequeue(limit, account));
+  _dequeueLock = result.catch(() => {});
+  return result;
+}
+
+async function _doDequeue(limit = 1, account) {
   const d = await getDb();
   const ts = nowISO();
   const rows = d.exec(
@@ -259,7 +302,7 @@ export async function clearAll(status) {
 
 export function closeDb() {
   if (db) {
-    _save();
+    _save(true);
     db.close();
     db = null;
     log.info("[queue] Banco fechado");
